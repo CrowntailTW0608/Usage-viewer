@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Type
 
-from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QRunnable, QThreadPool, QTimer, pyqtSignal, pyqtSlot
 
 from app.core.config_manager import ConfigManager
 from app.core.data_store import DataStore
@@ -23,17 +23,22 @@ PROVIDER_CLASSES: Dict[str, Type[BaseProvider]] = {
 RANGE_DAYS = {0: 1, 1: 7, 2: 30}  # index → days
 
 
-class FetchWorker(QObject):
-    """在背景執行緒中取得單一 Provider 用量。"""
-
+class WorkerSignals(QObject):
     finished = pyqtSignal(str, object)  # (provider_key, ProviderStatus)
+
+
+class FetchRunnable(QRunnable):
+    """在 QThreadPool 中執行的用量取得任務。"""
 
     def __init__(self, provider_key: str, provider: BaseProvider, days: int = 1):
         super().__init__()
+        self.signals = WorkerSignals()
         self._key = provider_key
         self._provider = provider
         self._days = days
+        self.setAutoDelete(True)
 
+    @pyqtSlot()
     def run(self) -> None:
         status = ProviderStatus()
         try:
@@ -52,7 +57,7 @@ class FetchWorker(QObject):
             status.connected = False
             status.error_message = str(e)
 
-        self.finished.emit(self._key, status)
+        self.signals.finished.emit(self._key, status)
 
 
 class Poller(QObject):
@@ -67,7 +72,7 @@ class Poller(QObject):
         self._data_store = data_store
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.poll_all)
-        self._threads: List[QThread] = []
+        self._pool = QThreadPool.globalInstance()
         self._range_days = 1
         self._pending = 0
 
@@ -81,14 +86,11 @@ class Poller(QObject):
 
     def stop(self) -> None:
         self._timer.stop()
-        self._cleanup_threads()
 
     def set_range(self, index: int) -> None:
         self._range_days = RANGE_DAYS.get(index, 1)
 
     def poll_all(self) -> None:
-        self._cleanup_threads()
-
         providers = self._config.get_providers()
         enabled = [p for p in providers if p.get("enabled", True)]
 
@@ -118,6 +120,8 @@ class Poller(QObject):
             cls = PROVIDER_CLASSES.get(ptype)
             if not cls:
                 self._pending -= 1
+                if self._pending <= 0:
+                    self.all_updated.emit()
                 continue
 
             if ptype == "gemini":
@@ -125,23 +129,9 @@ class Poller(QObject):
             else:
                 provider = cls(api_key, label)
 
-            thread = QThread()
-            worker = FetchWorker(key_id, provider, self._range_days)
-            worker.moveToThread(thread)
-
-            thread.started.connect(worker.run)
-            worker.finished.connect(lambda k, s: self._on_worker_done(k, s))
-            worker.finished.connect(thread.quit)
-            thread.finished.connect(thread.deleteLater)
-
-            # 保持引用避免 GC
-            thread._worker = worker  # type: ignore[attr-defined]
-            self._threads.append(thread)
-            thread.start()
-
-    def poll_single(self, provider_key: str) -> None:
-        """手動刷新單一 provider。"""
-        self.poll_all()  # 簡化：全部刷新
+            runnable = FetchRunnable(key_id, provider, self._range_days)
+            runnable.signals.finished.connect(self._on_worker_done)
+            self._pool.start(runnable)
 
     def _on_worker_done(self, provider_key: str, status: ProviderStatus) -> None:
         # 寫入歷史
@@ -156,13 +146,3 @@ class Poller(QObject):
         self._pending -= 1
         if self._pending <= 0:
             self.all_updated.emit()
-
-    def _cleanup_threads(self) -> None:
-        alive = []
-        for t in self._threads:
-            if t.isRunning():
-                t.quit()
-                t.wait(2000)
-            else:
-                alive.append(t)
-        self._threads.clear()
