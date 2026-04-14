@@ -268,11 +268,9 @@ class SettingsDialog(QDialog):
                 msg = "連線成功！"
                 if ptype == "claude" and not provider.is_admin_key():
                     msg += (
-                        "\n\n注意：你使用的是一般 API Key，"
-                        "無法查詢用量資料。\n"
-                        "如需查用量，請至 console.anthropic.com\n"
-                        "→ Settings → Admin Keys 取得 Admin Key\n"
-                        "（格式為 sk-ant-admin-...）"
+                        "\n\n提示：一般 API Key 可顯示模型清單，"
+                        "但無法從 API 查詢歷史用量。\n"
+                        "如有組織帳號 Admin Key 可取得更詳細資料。"
                     )
                 QMessageBox.information(self, "成功", msg)
             else:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Dict, List, Optional
 
 import requests
 
@@ -10,7 +10,8 @@ from app.providers.base import BaseProvider, RateLimits, UsageData
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://api.anthropic.com/v1/organizations"
+_API_BASE = "https://api.anthropic.com/v1"
+_ADMIN_BASE = f"{_API_BASE}/organizations"
 _API_VERSION = "2023-06-01"
 
 
@@ -24,23 +25,19 @@ class ClaudeProvider(BaseProvider):
     # ── public ──────────────────────────────────────────
 
     def fetch_usage(self, start: datetime, end: datetime) -> UsageData:
-        if not self.is_admin_key():
-            raise PermissionError(
-                "用量查詢需要 Admin API Key (sk-ant-admin-...)。\n"
-                "請至 console.anthropic.com → Settings → Admin Keys 取得。"
-            )
-        data = self._request_usage(start, end)
-        return self._parse_usage(data, start, end)
+        if self.is_admin_key():
+            data = self._request_usage(start, end)
+            return self._parse_usage(data, start, end)
+        # 一般 API Key：回傳空的 UsageData，實際用量由 DataStore 本地追蹤
+        return UsageData(period_start=start, period_end=end)
 
     def get_rate_limits(self) -> Optional[RateLimits]:
-        # Admin API 不提供 rate limit 資訊，回傳 None
         return None
 
     def test_connection(self) -> bool:
         try:
-            # 用 /v1/models 端點測試 key 有效性（一般 key 即可）
             resp = requests.get(
-                "https://api.anthropic.com/v1/models",
+                f"{_API_BASE}/models",
                 headers=self._headers(),
                 timeout=15,
             )
@@ -51,8 +48,17 @@ class ClaudeProvider(BaseProvider):
             return False
 
     def is_admin_key(self) -> bool:
-        """檢查 API Key 是否為 Admin Key（可查用量）。"""
         return self._api_key.startswith("sk-ant-admin")
+
+    def list_models(self) -> List[str]:
+        resp = requests.get(
+            f"{_API_BASE}/models",
+            headers=self._headers(),
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return [m.get("id", "") for m in data.get("data", [])]
 
     # ── private ─────────────────────────────────────────
 
@@ -64,18 +70,7 @@ class ClaudeProvider(BaseProvider):
         }
 
     def _request_usage(self, start: datetime, end: datetime) -> dict:
-        url = f"{_BASE_URL}/usage"
-        params = {
-            "starting_at": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "ending_at": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "bucket_width": "1d",
-        }
-        resp = requests.get(url, headers=self._headers(), params=params, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
-
-    def _request_cost(self, start: datetime, end: datetime) -> dict:
-        url = f"{_BASE_URL}/cost"
+        url = f"{_ADMIN_BASE}/usage"
         params = {
             "starting_at": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "ending_at": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
