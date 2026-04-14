@@ -2,6 +2,10 @@
     "chat.tools.terminal.autoApprove": {
         "pip": true,
         "git add": true,
-        "git commit": true
+        "git commit": true,
+        "/^cd \"d:\\\\pyData\\\\Usage viewer\"; \\.\\\\\\.venv\\\\Scripts\\\\Activate\\.ps1; python -c \"\nfrom app\\.core\\.config_manager import ConfigManager\nimport tempfile, pathlib, json\n\n# 用臨時檔案測試\ntmp = pathlib\\.Path\\(tempfile\\.mktemp\\(suffix='\\.json'\\)\\)\ncm = ConfigManager\\(tmp\\)\n\n# 測試預設設定\nassert cm\\.get_providers\\(\\) == \\[\\]\nassert cm\\.get_ui_settings\\(\\)\\['theme'\\] == 'dark'\n\n# 測試新增 provider\ncm\\.add_provider\\(\\{'type': 'claude', 'label': 'Claude Work'\\}\\)\nassert len\\(cm\\.get_providers\\(\\)\\) == 1\nassert cm\\.get_providers\\(\\)\\[0\\]\\['enabled'\\] == True\n\n# 測試 API key 存取\ncm\\.save_api_key\\('claude:test', 'sk-ant-admin-xxx'\\)\nassert cm\\.load_api_key\\('claude:test'\\) == 'sk-ant-admin-xxx'\ncm\\.delete_api_key\\('claude:test'\\)\nassert cm\\.load_api_key\\('claude:test'\\) is None\n\n# 測試移除 provider\ncm\\.remove_provider\\(0\\)\nassert len\\(cm\\.get_providers\\(\\)\\) == 0\n\n# 測試持久化\ncm\\.add_provider\\(\\{'type': 'gemini', 'label': 'Gemini'\\}\\)\ncm2 = ConfigManager\\(tmp\\)\nassert len\\(cm2\\.get_providers\\(\\)\\) == 1\n\ntmp\\.unlink\\(\\)\nprint\\('All config_manager tests passed'\\)\n\"\n$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
