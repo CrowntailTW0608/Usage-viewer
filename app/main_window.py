@@ -157,6 +157,30 @@ class MainWindow(QMainWindow):
         else:
             self._placeholder.hide()
 
+    def _reload_providers(self) -> None:
+        """根據 config 重建所有 provider 卡片。"""
+        from app.widgets.provider_card import ProviderCard
+
+        self.clear_cards()
+        providers = self._config.get_providers()
+        for p in providers:
+            if not p.get("enabled", True):
+                continue
+            card = ProviderCard(
+                provider_type=p["type"],
+                display_name=p.get("label", p["type"]),
+            )
+            # 若有 rate limits (如 Gemini)，立即顯示
+            if p["type"] == "gemini":
+                from app.providers.gemini import GeminiProvider
+                gp = GeminiProvider("", tier=p.get("tier", "free"))
+                rl = gp.get_rate_limits()
+                if rl:
+                    card.update_rate_limits(rl)
+            self.add_provider_card(card)
+        self.refresh_cards()
+        self.update_status(f"已載入 {len(self._provider_cards)} 個 Provider")
+
     # ── slots ───────────────────────────────────────────
 
     def _on_refresh(self) -> None:
@@ -166,4 +190,9 @@ class MainWindow(QMainWindow):
         pass  # 由 poller 處理
 
     def _on_settings(self) -> None:
-        pass  # Step 9 實作 SettingsDialog
+        from app.settings_dialog import SettingsDialog
+
+        dlg = SettingsDialog(self._config, self)
+        dlg.exec()
+        if dlg.changed:
+            self._reload_providers()
