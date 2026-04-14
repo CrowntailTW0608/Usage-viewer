@@ -24,6 +24,11 @@ class ClaudeProvider(BaseProvider):
     # ── public ──────────────────────────────────────────
 
     def fetch_usage(self, start: datetime, end: datetime) -> UsageData:
+        if not self.is_admin_key():
+            raise PermissionError(
+                "用量查詢需要 Admin API Key (sk-ant-admin-...)。\n"
+                "請至 console.anthropic.com → Settings → Admin Keys 取得。"
+            )
         data = self._request_usage(start, end)
         return self._parse_usage(data, start, end)
 
@@ -32,14 +37,22 @@ class ClaudeProvider(BaseProvider):
         return None
 
     def test_connection(self) -> bool:
-        now = datetime.utcnow()
-        start = now - timedelta(hours=1)
         try:
-            self._request_usage(start, now)
+            # 用 /v1/models 端點測試 key 有效性（一般 key 即可）
+            resp = requests.get(
+                "https://api.anthropic.com/v1/models",
+                headers=self._headers(),
+                timeout=15,
+            )
+            resp.raise_for_status()
             return True
         except Exception as e:
             logger.warning("Claude connection test failed: %s", e)
             return False
+
+    def is_admin_key(self) -> bool:
+        """檢查 API Key 是否為 Admin Key（可查用量）。"""
+        return self._api_key.startswith("sk-ant-admin")
 
     # ── private ─────────────────────────────────────────
 

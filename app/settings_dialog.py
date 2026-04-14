@@ -265,7 +265,16 @@ class SettingsDialog(QDialog):
 
             ok = provider.test_connection()
             if ok:
-                QMessageBox.information(self, "成功", "連線成功！")
+                msg = "連線成功！"
+                if ptype == "claude" and not provider.is_admin_key():
+                    msg += (
+                        "\n\n注意：你使用的是一般 API Key，"
+                        "無法查詢用量資料。\n"
+                        "如需查用量，請至 console.anthropic.com\n"
+                        "→ Settings → Admin Keys 取得 Admin Key\n"
+                        "（格式為 sk-ant-admin-...）"
+                    )
+                QMessageBox.information(self, "成功", msg)
             else:
                 QMessageBox.warning(self, "失敗", "連線失敗，請檢查 API Key。")
         except Exception as e:
