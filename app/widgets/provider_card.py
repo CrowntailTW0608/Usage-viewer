@@ -74,63 +74,51 @@ class ProviderCard(QFrame):
         self._detail = QWidget()
         detail_layout = QVBoxLayout(self._detail)
         detail_layout.setContentsMargins(28, 0, 0, 0)
+        detail_layout.setSpacing(6)
 
-        # token 用量區
-        token_grid = QGridLayout()
-        token_grid.setSpacing(6)
+        # token 用量區 — 橫列排列
+        token_row = QHBoxLayout()
+        token_row.setSpacing(16)
 
-        token_grid.addWidget(self._make_label("輸入 Tokens:"), 0, 0)
-        self._input_val = QLabel("—")
-        self._input_val.setStyleSheet("color: #4A9EFF; font-weight: bold;")
-        token_grid.addWidget(self._input_val, 0, 1)
+        token_row.addLayout(self._make_metric("輸入", "#4A9EFF"))
+        self._input_val = token_row.itemAt(token_row.count() - 1).layout().itemAt(1).widget()
 
-        token_grid.addWidget(self._make_label("輸出 Tokens:"), 1, 0)
-        self._output_val = QLabel("—")
-        self._output_val.setStyleSheet("color: #FF6B6B; font-weight: bold;")
-        token_grid.addWidget(self._output_val, 1, 1)
+        token_row.addLayout(self._make_metric("輸出", "#FF6B6B"))
+        self._output_val = token_row.itemAt(token_row.count() - 1).layout().itemAt(1).widget()
 
-        token_grid.addWidget(self._make_label("快取 Tokens:"), 2, 0)
-        self._cached_val = QLabel("—")
-        self._cached_val.setStyleSheet("color: #66BB6A; font-weight: bold;")
-        token_grid.addWidget(self._cached_val, 2, 1)
+        token_row.addLayout(self._make_metric("快取", "#66BB6A"))
+        self._cached_val = token_row.itemAt(token_row.count() - 1).layout().itemAt(1).widget()
 
-        token_grid.addWidget(self._make_label("費用 (USD):"), 3, 0)
-        self._cost_val = QLabel("—")
-        self._cost_val.setStyleSheet("color: #FFA726; font-weight: bold;")
-        token_grid.addWidget(self._cost_val, 3, 1)
+        token_row.addLayout(self._make_metric("費用", "#FFA726"))
+        self._cost_val = token_row.itemAt(token_row.count() - 1).layout().itemAt(1).widget()
 
-        detail_layout.addLayout(token_grid)
+        token_row.addStretch()
+        detail_layout.addLayout(token_row)
 
-        # rate limits 區
+        # rate limits 區 — 橫列排列
         self._rate_limits_section = QWidget()
-        rl_layout = QVBoxLayout(self._rate_limits_section)
-        rl_layout.setContentsMargins(0, 8, 0, 0)
-        rl_label = QLabel("速率限制")
-        rl_label.setStyleSheet("color: #aaa; font-size: 12px;")
-        rl_layout.addWidget(rl_label)
+        rl_layout = QHBoxLayout(self._rate_limits_section)
+        rl_layout.setContentsMargins(0, 4, 0, 0)
+        rl_layout.setSpacing(12)
 
-        rl_grid = QGridLayout()
-        rl_grid.setSpacing(4)
+        rl_title = QLabel("速率限制")
+        rl_title.setStyleSheet("color: #aaa; font-size: 12px;")
+        rl_title.setFixedWidth(60)
+        rl_layout.addWidget(rl_title)
 
-        rl_grid.addWidget(self._make_label("RPM:"), 0, 0)
-        self._rpm_bar = QProgressBar()
-        self._rpm_bar.setTextVisible(True)
-        self._rpm_bar.setFixedHeight(18)
-        rl_grid.addWidget(self._rpm_bar, 0, 1)
+        for name in ("RPM", "TPM", "RPD"):
+            lbl = QLabel(f"{name}:")
+            lbl.setStyleSheet("color: #aaa; font-size: 12px;")
+            lbl.setFixedWidth(35)
+            rl_layout.addWidget(lbl)
+            bar = QProgressBar()
+            bar.setTextVisible(True)
+            bar.setFixedHeight(16)
+            bar.setMinimumWidth(100)
+            rl_layout.addWidget(bar)
+            setattr(self, f"_{name.lower()}_bar", bar)
 
-        rl_grid.addWidget(self._make_label("TPM:"), 1, 0)
-        self._tpm_bar = QProgressBar()
-        self._tpm_bar.setTextVisible(True)
-        self._tpm_bar.setFixedHeight(18)
-        rl_grid.addWidget(self._tpm_bar, 1, 1)
-
-        rl_grid.addWidget(self._make_label("RPD:"), 2, 0)
-        self._rpd_bar = QProgressBar()
-        self._rpd_bar.setTextVisible(True)
-        self._rpd_bar.setFixedHeight(18)
-        rl_grid.addWidget(self._rpd_bar, 2, 1)
-
-        rl_layout.addLayout(rl_grid)
+        rl_layout.addStretch()
         self._rate_limits_section.hide()
         detail_layout.addWidget(self._rate_limits_section)
 
@@ -192,6 +180,19 @@ class ProviderCard(QFrame):
         lbl.setStyleSheet("color: #aaa; font-size: 13px;")
         lbl.setFixedWidth(110)
         return lbl
+
+    @staticmethod
+    def _make_metric(label_text: str, color: str) -> QVBoxLayout:
+        """建立一組 label + value 的垂直佈局（用於橫列排列）。"""
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        lbl = QLabel(label_text)
+        lbl.setStyleSheet("color: #aaa; font-size: 11px;")
+        col.addWidget(lbl)
+        val = QLabel("—")
+        val.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 14px;")
+        col.addWidget(val)
+        return col
 
     @staticmethod
     def _format_number(n: int) -> str:
