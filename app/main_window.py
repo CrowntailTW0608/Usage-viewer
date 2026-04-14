@@ -123,6 +123,12 @@ class MainWindow(QMainWindow):
 
         self._tray = QSystemTrayIcon(self)
         self._tray.setToolTip("GAI Usage Viewer")
+        # 使用 Qt 內建圖示
+        icon = self.style().standardIcon(
+            self.style().StandardPixmap.SP_ComputerIcon
+        )
+        self._tray.setIcon(icon)
+        self.setWindowIcon(icon)
 
         tray_menu = QMenu()
         show_action = tray_menu.addAction("顯示")
