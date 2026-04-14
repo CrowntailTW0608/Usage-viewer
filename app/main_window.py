@@ -22,7 +22,8 @@ from PyQt6.QtWidgets import (
 
 from app.core.config_manager import ConfigManager
 from app.core.data_store import DataStore
-from app.providers.base import BaseProvider
+from app.core.poller import Poller
+from app.providers.base import BaseProvider, ProviderStatus
 
 
 class MainWindow(QMainWindow):
@@ -34,11 +35,21 @@ class MainWindow(QMainWindow):
         self._config = ConfigManager()
         self._data_store = DataStore()
         self._provider_cards: List[QWidget] = []
+        self._card_map: Dict[str, QWidget] = {}  # provider_key → card
 
         self._build_toolbar()
         self._build_central()
         self._build_statusbar()
         self._build_tray()
+
+        # 輪詢器
+        self._poller = Poller(self._config, self._data_store)
+        self._poller.provider_updated.connect(self._on_provider_updated)
+        self._poller.all_updated.connect(self._on_all_updated)
+
+        # 啟動時載入 providers
+        self._reload_providers()
+        self._poller.start()
 
     # ── toolbar ─────────────────────────────────────────
 
@@ -135,6 +146,7 @@ class MainWindow(QMainWindow):
             self.hide()
             event.ignore()
         else:
+            self._poller.stop()
             self._data_store.close()
             event.accept()
 
@@ -162,13 +174,16 @@ class MainWindow(QMainWindow):
         from app.widgets.provider_card import ProviderCard
 
         self.clear_cards()
+        self._card_map.clear()
         providers = self._config.get_providers()
         for p in providers:
             if not p.get("enabled", True):
                 continue
+            label = p.get("label", p["type"])
+            key_id = f"{p['type']}:{label}"
             card = ProviderCard(
                 provider_type=p["type"],
-                display_name=p.get("label", p["type"]),
+                display_name=label,
             )
             # 若有 rate limits (如 Gemini)，立即顯示
             if p["type"] == "gemini":
@@ -178,6 +193,7 @@ class MainWindow(QMainWindow):
                 if rl:
                     card.update_rate_limits(rl)
             self.add_provider_card(card)
+            self._card_map[key_id] = card
         self.refresh_cards()
         self.update_status(f"已載入 {len(self._provider_cards)} 個 Provider")
 
@@ -185,14 +201,35 @@ class MainWindow(QMainWindow):
 
     def _on_refresh(self) -> None:
         self.update_status("正在刷新...")
+        self._poller.poll_all()
 
     def _on_range_changed(self, index: int) -> None:
-        pass  # 由 poller 處理
+        self._poller.set_range(index)
+        self._poller.poll_all()
+
+    def _on_provider_updated(self, key: str, status: ProviderStatus) -> None:
+        card = self._card_map.get(key)
+        if card:
+            card.update_status(status)
+
+            # 更新歷史圖表
+            history = self._data_store.get_daily_summary(key, days=7)
+            if history:
+                days = [h["day"] for h in reversed(history)]
+                inp = [h["total_input"] for h in reversed(history)]
+                out = [h["total_output"] for h in reversed(history)]
+                card.update_chart(days, inp, out)
+
+    def _on_all_updated(self) -> None:
+        now = datetime.now().strftime("%H:%M:%S")
+        self.update_status(f"最後更新: {now}")
 
     def _on_settings(self) -> None:
         from app.settings_dialog import SettingsDialog
 
+        self._poller.stop()
         dlg = SettingsDialog(self._config, self)
         dlg.exec()
         if dlg.changed:
             self._reload_providers()
+        self._poller.start()
