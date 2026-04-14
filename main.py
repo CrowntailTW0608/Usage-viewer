@@ -7,6 +7,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("GAI Usage Viewer")
     app.setOrganizationName("GAIUsageViewer")
+    app.setQuitOnLastWindowClosed(True)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

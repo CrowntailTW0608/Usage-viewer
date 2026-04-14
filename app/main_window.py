@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         show_action = tray_menu.addAction("顯示")
         show_action.triggered.connect(self._show_from_tray)
         quit_action = tray_menu.addAction("結束")
-        quit_action.triggered.connect(QApplication.quit)
+        quit_action.triggered.connect(self._quit_app)
         self._tray.setContextMenu(tray_menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
@@ -141,14 +141,17 @@ class MainWindow(QMainWindow):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self._show_from_tray()
 
+    def _quit_app(self) -> None:
+        """完整清理後結束應用程式。"""
+        self._poller.stop()
+        self._data_store.close()
+        if hasattr(self, "_tray"):
+            self._tray.hide()
+        QApplication.quit()
+
     def closeEvent(self, event) -> None:
-        if hasattr(self, "_tray") and self._tray.isVisible():
-            self.hide()
-            event.ignore()
-        else:
-            self._poller.stop()
-            self._data_store.close()
-            event.accept()
+        self._quit_app()
+        event.accept()
 
     # ── card management ─────────────────────────────────
 

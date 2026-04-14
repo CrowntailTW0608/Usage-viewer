@@ -86,6 +86,7 @@ class Poller(QObject):
 
     def stop(self) -> None:
         self._timer.stop()
+        self._pool.waitForDone(3000)
 
     def set_range(self, index: int) -> None:
         self._range_days = RANGE_DAYS.get(index, 1)
